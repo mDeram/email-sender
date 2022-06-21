@@ -1,0 +1,7 @@
+#!/bin/sh
+
+pnpm i --production=false --frozen-lockfile \
+    && pnpm run build && go build \
+    && pm2 reload email-sender && systemctl restart email-receiver \
+    && echo "Deployed" || echo "Error"
+

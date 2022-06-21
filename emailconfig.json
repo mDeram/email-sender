@@ -1,0 +1,18 @@
+{
+    "drive": {
+        "secret": "arst",
+        "from": "drive@mderam.com",
+        "secure": true
+    },
+    "drive-public": {
+        "from": "drive@mderam.com",
+        "to": "drive@mderam.com",
+        "prefix": "Drive Support - ",
+        "secure": false
+    },
+    "portfolio": {
+        "from": "mderam@protonmail.com",
+        "to": "mderam@protonmail.com",
+        "secure": false
+    }
+}
