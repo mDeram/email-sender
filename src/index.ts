@@ -41,7 +41,7 @@ async function sendMail(email: Email) {
         port: test ? 7777 : 1025,
         secure: false,
         auth: {
-            user: test ? undefined : "contact@mderam.com",
+            user: test ? undefined : process.env.MAIL_USER,
             pass: test ? undefined : process.env.MAIL_PASS,
         },
         tls: {
