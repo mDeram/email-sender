@@ -1,5 +1,5 @@
 node_modules/
 dist/
 .env
-mailconfig.json
+emailconfig.json
 email-receiver
