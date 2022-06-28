@@ -5,13 +5,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-    amqp "github.com/rabbitmq/amqp091-go"
+    "github.com/mailgun/mailgun-go/v3"
+    "context"
+    "time"
 )
 
-var QUEUE_NAME = "email"
+type Config struct {
+    Domain string
+    ApiKey string
+    Configs Configs
+}
 
 type Configs map[string]ConfigItem
-type publisherFunc func (email Email) error
 
 type ConfigItem struct {
     Secret string
@@ -21,13 +26,15 @@ type ConfigItem struct {
     Secure bool
 }
 
-func parseConfig() Configs {
-    var config Configs
+type sendEmailFunc func (email Email) error
+
+func parseConfig() Config {
+    var config Config
     content, err := ioutil.ReadFile("./emailconfig.json")
     panicOnErr(err)
 
     panicOnErr(json.Unmarshal(content, &config))
-    for _, item := range config {
+    for _, item := range config.Configs {
         if item.To == "" && item.Secret == "" {
             panic("Endpoint needs a secret to send to anyone")
         }
@@ -63,44 +70,22 @@ func panicMsgOnErr(err error, msg string) {
     }
 }
 
-func getQueuePublisher() publisherFunc {
-    connection, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-    panicMsgOnErr(err, "Failed to connect to RabbitMQ")
-
-    channel, err := connection.Channel()
-    panicMsgOnErr(err, "Failed to open a channel")
-
-    _, err = channel.QueueDeclare(
-        QUEUE_NAME, // name
-        true,    // durable
-        false,   // delete when unused
-        false,   // exclusive
-        false,   // no-wait
-        nil,     // arguments
-    )
-    panicMsgOnErr(err, "Failed to declare a queue")
-
-    publisher := func (email Email) error {
-        body, err := json.Marshal(email)
-        if err != nil { return err }
-
-        return channel.Publish(
-            "",
-            QUEUE_NAME,
-            false,
-            false,
-            amqp.Publishing{
-                ContentType: "text/plain",
-                Body: []byte(body),
-            },
-        )
-    }
-
-    return publisher
-}
-
-func addEmailEndpoint(configs Configs, publisher publisherFunc) {
+func addEmailEndpoint(configs Configs, sendEmail sendEmailFunc) {
     http.HandleFunc("/send-email", func (w http.ResponseWriter, req *http.Request) {
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Headers", "*")
+        w.Header().Set("Access-Control-Allow-Methods", "OPTIONS,POST")
+
+        if req.Method == "OPTIONS" {
+            w.WriteHeader(http.StatusOK)
+            return
+        }
+
+        if req.Method != "POST" {
+            w.WriteHeader(http.StatusForbidden)
+            return
+        }
+
         name := req.Header.Get("Email-Server-Name")
         secret := req.Header.Get("Email-Server-Secret")
 
@@ -148,10 +133,9 @@ func addEmailEndpoint(configs Configs, publisher publisherFunc) {
             email.Text = emailData.Content
         }
 
-
-        err = publisher(email)
+        err = sendEmail(email)
         if err != nil {
-            http.Error(w, "Could not put email in queue", http.StatusInternalServerError)
+            http.Error(w, "Could not send email", http.StatusInternalServerError)
             return
         }
 
@@ -159,11 +143,31 @@ func addEmailEndpoint(configs Configs, publisher publisherFunc) {
     })
 }
 
-func main() {
-    configs := parseConfig()
-    publisher := getQueuePublisher()
+func getMessageSender(config Config) sendEmailFunc {
+    mg := mailgun.NewMailgun(config.Domain, config.ApiKey)
+    mg.SetAPIBase("https://api.eu.mailgun.net/v3")
 
-    addEmailEndpoint(configs, publisher)
+    return func(email Email) error {
+        message := mg.NewMessage(
+            email.From,
+            email.Subject,
+            email.Text,
+            email.To,
+        )
+        message.SetHtml(email.Html)
+        ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+        defer cancel()
+
+        _, _, err := mg.Send(ctx, message)
+        return err
+    }
+}
+
+func main() {
+    config := parseConfig()
+    sendEmail := getMessageSender(config)
+
+    addEmailEndpoint(config.Configs, sendEmail)
 
     port := "8080"
     fmt.Printf("Starting mail server at port %s\n", port);

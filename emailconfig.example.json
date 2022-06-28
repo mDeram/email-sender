@@ -1,0 +1,17 @@
+{
+    "domain": "mydomain.com",
+    "apiKey": "key",
+    "configs": {
+        "private endpoint name to which I can send HTML emails to anyone": {
+            "secret": "password",
+            "from": "my@email.com",
+            "secure": true
+        },
+        "public endpoint name to which I can send TEXT emails to a controlled email": {
+            "from": "my@email.com",
+            "to": "my@email.com",
+            "prefix": "A prefix to help filter inbox - ",
+            "secure": false
+        }
+    }
+}

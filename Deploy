@@ -1,7 +1,3 @@
 #!/bin/sh
 
-pnpm i --production=false --frozen-lockfile \
-    && pnpm run build && /snap/bin/go build -buildvcs=false\
-    && pm2 reload email-sender && systemctl restart email-receiver \
-    && echo "Deployed" || echo "Error"
-
+/snap/bin/go build -buildvcs=false && systemctl restart email-sender && echo "Deployed" || echo "Error"
